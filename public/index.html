@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>MMP Stream Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #eee; padding: 20px; }
+    h1 { margin-bottom: 20px; }
+    .channel { margin-bottom: 30px; }
+    .channel h2 { margin-bottom: 8px; font-size: 1rem; color: #aaa; }
+    .status { font-size: 0.8rem; color: #888; margin-top: 6px; }
+    .status span { color: #4caf50; }
+    video { display: block; background: #000; }
+    .error { color: #f44336; }
+  </style>
+</head>
+<body>
+  <h1>MMP Stream Player</h1>
+  <div id="channels"><p>채널 목록 로딩 중...</p></div>
+
+  <script>
+    async function loadChannels() {
+      let channels;
+      try {
+        const res = await fetch('/streams');
+        channels = await res.json();
+      } catch (e) {
+        document.getElementById('channels').innerHTML =
+          '<p class="error">서버에 연결할 수 없습니다.</p>';
+        return;
+      }
+
+      if (!channels.length) {
+        document.getElementById('channels').innerHTML =
+          '<p>채널 없음 — recordings/ 폴더에 카메라 하위 디렉터리와 MP4 파일을 추가하세요.</p>';
+        return;
+      }
+
+      const container = document.getElementById('channels');
+      container.innerHTML = '';
+
+      for (const ch of channels) {
+        const div = document.createElement('div');
+        div.className = 'channel';
+        div.innerHTML = `<h2>${ch.channelId} — status: <span>${ch.status}</span></h2>`;
+
+        const video = document.createElement('video');
+        video.controls = true;
+        video.width = 720;
+        video.autoplay = true;
+        video.muted = true;
+        div.appendChild(video);
+
+        const statusEl = document.createElement('p');
+        statusEl.className = 'status';
+        div.appendChild(statusEl);
+
+        container.appendChild(div);
+
+        if (Hls.isSupported()) {
+          const hls = new Hls({ liveSyncDurationCount: 3, debug: false });
+          hls.loadSource(ch.playlistUrl);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(() => {});
+            statusEl.textContent = 'HLS 연결됨';
+          });
+          hls.on(Hls.Events.ERROR, (_, data) => {
+            if (data.fatal) {
+              statusEl.textContent = `오류: ${data.details} — 5초 후 재시도`;
+              setTimeout(() => hls.loadSource(ch.playlistUrl), 5000);
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Safari native HLS
+          video.src = ch.playlistUrl;
+          video.play().catch(() => {});
+          statusEl.textContent = 'Safari 네이티브 HLS';
+        } else {
+          statusEl.textContent = '이 브라우저는 HLS를 지원하지 않습니다.';
+        }
+      }
+    }
+
+    loadChannels();
+  </script>
+</body>
+</html>
