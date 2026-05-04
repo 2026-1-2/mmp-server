@@ -1,11 +1,14 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   Param,
   Req,
   Res,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   StreamableFile,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -16,6 +19,7 @@ import { StreamsService } from './streams.service';
 const CHANNEL_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const SEGMENT_RE = /^[a-zA-Z0-9_.-]+\.ts$/;
 const FILENAME_RE = /^[a-zA-Z0-9_.-]+\.mp4$/i;
+const RTSP_URL_RE = /^rtsp:\/\//i;
 
 @Controller('streams')
 export class StreamsController {
@@ -24,6 +28,21 @@ export class StreamsController {
   @Get()
   list() {
     return this.streamsService.listChannels();
+  }
+
+  @Post('rtsp')
+  registerRtsp(@Body() body: { channelId: string; rtspUrl: string }) {
+    if (!CHANNEL_ID_RE.test(body?.channelId ?? ''))
+      throw new BadRequestException('Invalid channel ID');
+    if (!RTSP_URL_RE.test(body?.rtspUrl ?? ''))
+      throw new BadRequestException('rtspUrl must start with rtsp://');
+    if (this.streamsService.hasChannel(body.channelId))
+      throw new ConflictException(`Channel already registered: ${body.channelId}`);
+    this.streamsService.registerRtspChannel(body.channelId, body.rtspUrl);
+    return {
+      channelId: body.channelId,
+      playlistUrl: `/streams/${body.channelId}/live/playlist.m3u8`,
+    };
   }
 
   // ── Live ──────────────────────────────────────────────────────────────────

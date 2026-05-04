@@ -9,10 +9,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { LiveHandler } from './live-handler';
 import { VodHandler } from './vod-handler';
+import { RtspHandler, maskRtspUrl } from './rtsp-handler';
+
+interface ILiveHandler {
+  readonly playlistPath: string;
+  readonly sourceDir: string;
+  status: string;
+  lastSegmentAt: Date | null;
+  stop(): void;
+}
 
 interface ChannelState {
   channelId: string;
-  live: LiveHandler | null;
+  live: ILiveHandler | null;
   vod: VodHandler | null;
 }
 
@@ -49,6 +58,53 @@ export class StreamsService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit() {
+    this.initFromRecordings();
+    this.initFromEnvRtsp();
+  }
+
+  onModuleDestroy() {
+    for (const { live } of this.channels.values()) {
+      live?.stop();
+    }
+  }
+
+  listChannels() {
+    return Array.from(this.channels.values()).map(({ channelId, live, vod }) => ({
+      channelId,
+      live: live
+        ? { playlistUrl: `/streams/${channelId}/live/playlist.m3u8`, status: live.status }
+        : null,
+      vod: vod ? { listUrl: `/streams/${channelId}/vod` } : null,
+    }));
+  }
+
+  getLiveHandler(channelId: string): ILiveHandler | null {
+    return this.channels.get(channelId)?.live ?? null;
+  }
+
+  getVodHandler(channelId: string): VodHandler | null {
+    return this.channels.get(channelId)?.vod ?? null;
+  }
+
+  hasChannel(channelId: string): boolean {
+    return this.channels.has(channelId);
+  }
+
+  registerRtspChannel(channelId: string, rtspUrl: string) {
+    const hlsDir = path.join(this.hlsOutputDir, channelId);
+    const handler = new RtspHandler(
+      channelId,
+      rtspUrl,
+      hlsDir,
+      this.segmentDuration,
+      this.playlistWindow,
+    );
+    handler.start();
+    this.channels.set(channelId, { channelId, live: handler, vod: null });
+    this.logger.log(`[${channelId}] RTSP handler started → ${maskRtspUrl(rtspUrl)}`);
+  }
+
+  private initFromRecordings() {
     if (!fs.existsSync(this.recordingsDir)) {
       this.logger.warn(`RECORDINGS_DIR not found: ${this.recordingsDir}`);
       return;
@@ -69,32 +125,26 @@ export class StreamsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  onModuleDestroy() {
-    for (const { live } of this.channels.values()) {
-      live?.stop();
+  private initFromEnvRtsp() {
+    const raw = this.config.get<string>('RTSP_CHANNELS', '');
+    if (!raw) return;
+
+    let entries: { channelId: string; rtspUrl: string }[];
+    try {
+      entries = JSON.parse(raw);
+    } catch {
+      this.logger.error('RTSP_CHANNELS is not valid JSON — skipping');
+      return;
     }
-  }
 
-  listChannels() {
-    return Array.from(this.channels.values()).map(({ channelId, live, vod }) => ({
-      channelId,
-      live: live
-        ? { playlistUrl: `/streams/${channelId}/live/playlist.m3u8`, status: live.status }
-        : null,
-      vod: vod ? { listUrl: `/streams/${channelId}/vod` } : null,
-    }));
-  }
-
-  getLiveHandler(channelId: string): LiveHandler | null {
-    return this.channels.get(channelId)?.live ?? null;
-  }
-
-  getVodHandler(channelId: string): VodHandler | null {
-    return this.channels.get(channelId)?.vod ?? null;
-  }
-
-  hasChannel(channelId: string): boolean {
-    return this.channels.has(channelId);
+    for (const { channelId, rtspUrl } of entries) {
+      if (!channelId || !rtspUrl) continue;
+      if (this.channels.has(channelId)) {
+        this.logger.warn(`[${channelId}] already registered — skipping RTSP_CHANNELS entry`);
+        continue;
+      }
+      this.registerRtspChannel(channelId, rtspUrl);
+    }
   }
 
   private initChannel(channelId: string) {
