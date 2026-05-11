@@ -51,7 +51,7 @@
 
         // ── Live ──────────────────────────────────
         if (ch.live) {
-          div.innerHTML += `<h3>라이브 (HLS) — ${ch.live.status}</h3>`;
+          div.innerHTML += `<h3>라이브 (HLS)</h3>`;
           const video = document.createElement('video');
           video.controls = true;
           video.width = 720;
@@ -65,7 +65,7 @@
 
           if (Hls.isSupported()) {
             const hls = new Hls({ liveSyncDurationCount: 3, debug: false });
-            hls.loadSource(ch.live.playlistUrl);
+            hls.loadSource(ch.live.hlsUrl);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
               video.play().catch(() => {});
@@ -74,11 +74,11 @@
             hls.on(Hls.Events.ERROR, (_, data) => {
               if (data.fatal) {
                 statusEl.textContent = `오류: ${data.details} — 5초 후 재시도`;
-                setTimeout(() => hls.loadSource(ch.live.playlistUrl), 5000);
+                setTimeout(() => hls.loadSource(ch.live.hlsUrl), 5000);
               }
             });
           } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = ch.live.playlistUrl;
+            video.src = ch.live.hlsUrl;
             video.play().catch(() => {});
             statusEl.textContent = 'Safari 네이티브 HLS';
           }
