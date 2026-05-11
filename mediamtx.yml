@@ -4,6 +4,17 @@
 logLevel: info
 
 ###############
+# Auth
+###############
+authInternalUsers:
+  - user: any
+    permissions:
+      - action: api
+      - action: publish
+      - action: read
+      - action: playback
+
+###############
 # API
 ###############
 api: yes
