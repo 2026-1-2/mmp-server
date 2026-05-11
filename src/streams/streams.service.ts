@@ -2,59 +2,41 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
-  OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { LiveHandler } from './live-handler';
 import { VodHandler } from './vod-handler';
-import { RtspHandler, maskRtspUrl } from './rtsp-handler';
-
-interface ILiveHandler {
-  readonly playlistPath: string;
-  readonly sourceDir: string;
-  status: string;
-  lastSegmentAt: Date | null;
-  stop(): void;
-}
+import { MediamtxService } from './mediamtx.service';
 
 interface ChannelState {
   channelId: string;
-  live: ILiveHandler | null;
+  hlsUrl: string | null;
+  webRtcUrl: string | null;
   vod: VodHandler | null;
 }
 
 @Injectable()
-export class StreamsService implements OnModuleInit, OnModuleDestroy {
+export class StreamsService implements OnModuleInit {
   private readonly logger = new Logger(StreamsService.name);
   private readonly channels = new Map<string, ChannelState>();
 
   private readonly recordingsDir: string;
-  private readonly hlsOutputDir: string;
-  private readonly segmentDuration: number;
-  private readonly playlistWindow: number;
-  private readonly fileStableMs: number;
+  private readonly mediamtxHost: string;
+  private readonly hlsPort: number;
+  private readonly webRtcPort: number;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly mediamtx: MediamtxService,
+  ) {
     this.recordingsDir = path.resolve(
       config.get<string>('RECORDINGS_DIR', './recordings'),
     );
-    this.hlsOutputDir = path.resolve(
-      config.get<string>('HLS_OUTPUT_DIR', './hls'),
-    );
-    this.segmentDuration = parseInt(
-      config.get<string>('SEGMENT_DURATION', '4'),
-      10,
-    );
-    this.playlistWindow = parseInt(
-      config.get<string>('PLAYLIST_WINDOW', '6'),
-      10,
-    );
-    this.fileStableMs = parseInt(
-      config.get<string>('FILE_STABLE_MS', '500'),
-      10,
-    );
+    const mediamtxUrl = config.get<string>('MEDIAMTX_URL', 'http://localhost:9997');
+    this.mediamtxHost = new URL(mediamtxUrl).hostname;
+    this.hlsPort = parseInt(config.get<string>('MEDIAMTX_HLS_PORT', '8888'), 10);
+    this.webRtcPort = parseInt(config.get<string>('MEDIAMTX_WEBRTC_PORT', '8889'), 10);
   }
 
   onModuleInit() {
@@ -62,24 +44,12 @@ export class StreamsService implements OnModuleInit, OnModuleDestroy {
     this.initFromEnvRtsp();
   }
 
-  onModuleDestroy() {
-    for (const { live } of this.channels.values()) {
-      live?.stop();
-    }
-  }
-
   listChannels() {
-    return Array.from(this.channels.values()).map(({ channelId, live, vod }) => ({
+    return Array.from(this.channels.values()).map(({ channelId, hlsUrl, webRtcUrl, vod }) => ({
       channelId,
-      live: live
-        ? { playlistUrl: `/streams/${channelId}/live/playlist.m3u8`, status: live.status }
-        : null,
+      live: hlsUrl ? { hlsUrl, webRtcUrl } : null,
       vod: vod ? { listUrl: `/streams/${channelId}/vod` } : null,
     }));
-  }
-
-  getLiveHandler(channelId: string): ILiveHandler | null {
-    return this.channels.get(channelId)?.live ?? null;
   }
 
   getVodHandler(channelId: string): VodHandler | null {
@@ -90,18 +60,16 @@ export class StreamsService implements OnModuleInit, OnModuleDestroy {
     return this.channels.has(channelId);
   }
 
-  registerRtspChannel(channelId: string, rtspUrl: string) {
-    const hlsDir = path.join(this.hlsOutputDir, channelId);
-    const handler = new RtspHandler(
-      channelId,
-      rtspUrl,
-      hlsDir,
-      this.segmentDuration,
-      this.playlistWindow,
-    );
-    handler.start();
-    this.channels.set(channelId, { channelId, live: handler, vod: null });
-    this.logger.log(`[${channelId}] RTSP handler started → ${maskRtspUrl(rtspUrl)}`);
+  async registerRtspChannel(
+    channelId: string,
+    rtspUrl: string,
+  ): Promise<{ hlsUrl: string; webRtcUrl: string }> {
+    await this.mediamtx.addPath(channelId, rtspUrl);
+    const hlsUrl = `http://${this.mediamtxHost}:${this.hlsPort}/${channelId}/index.m3u8`;
+    const webRtcUrl = `http://${this.mediamtxHost}:${this.webRtcPort}/${channelId}/whep`;
+    this.channels.set(channelId, { channelId, hlsUrl, webRtcUrl, vod: null });
+    this.logger.log(`[${channelId}] Registered with mediaMTX → HLS: ${hlsUrl}`);
+    return { hlsUrl, webRtcUrl };
   }
 
   private initFromRecordings() {
@@ -115,13 +83,13 @@ export class StreamsService implements OnModuleInit, OnModuleDestroy {
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
 
-    if (channelIds.length === 0) {
-      this.logger.warn(`No channels found in: ${this.recordingsDir}`);
-      return;
-    }
-
     for (const id of channelIds) {
-      this.initChannel(id);
+      const vodDir = path.join(this.recordingsDir, id, 'vod');
+      if (fs.existsSync(vodDir)) {
+        const vod = new VodHandler(vodDir);
+        this.channels.set(id, { channelId: id, hlsUrl: null, webRtcUrl: null, vod });
+        this.logger.log(`[${id}] VOD handler ready (${vodDir})`);
+      }
     }
   }
 
@@ -143,39 +111,9 @@ export class StreamsService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`[${channelId}] already registered — skipping RTSP_CHANNELS entry`);
         continue;
       }
-      this.registerRtspChannel(channelId, rtspUrl);
-    }
-  }
-
-  private initChannel(channelId: string) {
-    const channelDir = path.join(this.recordingsDir, channelId);
-    const liveDir = path.join(channelDir, 'live');
-    const vodDir = path.join(channelDir, 'vod');
-
-    let live: LiveHandler | null = null;
-    let vod: VodHandler | null = null;
-
-    if (fs.existsSync(liveDir)) {
-      const playlistDir = path.join(this.hlsOutputDir, channelId);
-      fs.mkdirSync(playlistDir, { recursive: true });
-      live = new LiveHandler(
-        liveDir,
-        path.join(playlistDir, 'playlist.m3u8'),
-        this.segmentDuration,
-        this.playlistWindow,
-        this.fileStableMs,
+      this.registerRtspChannel(channelId, rtspUrl).catch((err: Error) =>
+        this.logger.error(`[${channelId}] Failed to register with mediaMTX: ${err.message}`),
       );
-      live.start();
-      this.logger.log(`[${channelId}] Live handler started (${liveDir})`);
-    }
-
-    if (fs.existsSync(vodDir)) {
-      vod = new VodHandler(vodDir);
-      this.logger.log(`[${channelId}] VOD handler ready (${vodDir})`);
-    }
-
-    if (live || vod) {
-      this.channels.set(channelId, { channelId, live, vod });
     }
   }
 }

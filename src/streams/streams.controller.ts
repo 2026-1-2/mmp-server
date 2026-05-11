@@ -9,15 +9,12 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
-  StreamableFile,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
-import * as path from 'path';
 import { StreamsService } from './streams.service';
 
 const CHANNEL_ID_RE = /^[a-zA-Z0-9_-]+$/;
-const SEGMENT_RE = /^[a-zA-Z0-9_.-]+\.ts$/;
 const FILENAME_RE = /^[a-zA-Z0-9_.-]+\.mp4$/i;
 const RTSP_URL_RE = /^rtsp:\/\//i;
 
@@ -31,59 +28,15 @@ export class StreamsController {
   }
 
   @Post('rtsp')
-  registerRtsp(@Body() body: { channelId: string; rtspUrl: string }) {
+  async registerRtsp(@Body() body: { channelId: string; rtspUrl: string }) {
     if (!CHANNEL_ID_RE.test(body?.channelId ?? ''))
       throw new BadRequestException('Invalid channel ID');
     if (!RTSP_URL_RE.test(body?.rtspUrl ?? ''))
       throw new BadRequestException('rtspUrl must start with rtsp://');
     if (this.streamsService.hasChannel(body.channelId))
       throw new ConflictException(`Channel already registered: ${body.channelId}`);
-    this.streamsService.registerRtspChannel(body.channelId, body.rtspUrl);
-    return {
-      channelId: body.channelId,
-      playlistUrl: `/streams/${body.channelId}/live/playlist.m3u8`,
-    };
-  }
-
-  // ── Live ──────────────────────────────────────────────────────────────────
-
-  @Get(':channelId/live/playlist.m3u8')
-  playlist(
-    @Param('channelId') channelId: string,
-    @Res({ passthrough: true }) res: Response,
-  ): StreamableFile {
-    this.assertChannelId(channelId);
-    const live = this.streamsService.getLiveHandler(channelId);
-    if (!live) throw new NotFoundException(`No live stream for channel: ${channelId}`);
-
-    if (!fs.existsSync(live.playlistPath)) {
-      throw new NotFoundException('Playlist not ready yet — wait for the first TS segment');
-    }
-
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-    res.setHeader('Cache-Control', 'no-cache, no-store');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    return new StreamableFile(fs.createReadStream(live.playlistPath));
-  }
-
-  @Get(':channelId/live/:segment')
-  segment(
-    @Param('channelId') channelId: string,
-    @Param('segment') segment: string,
-    @Res({ passthrough: true }) res: Response,
-  ): StreamableFile {
-    this.assertChannelId(channelId);
-    if (!SEGMENT_RE.test(segment)) throw new BadRequestException('Invalid segment name');
-
-    const live = this.streamsService.getLiveHandler(channelId);
-    if (!live) throw new NotFoundException(`No live stream for channel: ${channelId}`);
-
-    const filePath = path.join(live.sourceDir, segment);
-    if (!fs.existsSync(filePath)) throw new NotFoundException('Segment not found');
-
-    res.setHeader('Content-Type', 'video/mp2t');
-    res.setHeader('Cache-Control', 'public, max-age=60, immutable');
-    return new StreamableFile(fs.createReadStream(filePath));
+    const urls = await this.streamsService.registerRtspChannel(body.channelId, body.rtspUrl);
+    return { channelId: body.channelId, ...urls };
   }
 
   // ── VOD ───────────────────────────────────────────────────────────────────

@@ -1,0 +1,34 @@
+###############
+# General
+###############
+logLevel: info
+
+###############
+# API
+###############
+api: yes
+apiAddress: :9997
+
+###############
+# RTSP
+###############
+rtsp: yes
+rtspAddress: :8554
+
+###############
+# HLS
+###############
+hls: yes
+hlsAddress: :8888
+
+###############
+# WebRTC
+###############
+webrtc: yes
+webrtcAddress: :8889
+
+###############
+# Path defaults
+###############
+pathDefaults:
+  sourceOnDemand: yes
