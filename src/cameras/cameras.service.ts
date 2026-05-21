@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import * as net from 'net';
 import { spawn } from 'child_process';
 import { MediamtxService } from '../streams/mediamtx.service';
@@ -40,37 +41,37 @@ export interface SystemLog {
 }
 
 export class CreateCameraDto {
-  camera_name: string;
-  camera_type: string;
-  ip_address: string;
-  port: number;
-  rtsp_url: string;
-  rtsp_username: string;
-  rtsp_password: string;
-  zone_id: number;
-  resolution: string;
-  fps: number;
-  codec: string;
-  ptz_enabled: boolean;
-  ir_enabled: boolean;
-  installed_at: string;
+  @ApiProperty({ example: 'CAM-01 활주로' }) camera_name: string;
+  @ApiProperty({ example: 'PTZ', enum: ['PTZ', 'FIXED'] }) camera_type: string;
+  @ApiProperty({ example: '192.168.0.101' }) ip_address: string;
+  @ApiProperty({ example: 554 }) port: number;
+  @ApiProperty({ example: 'rtsp://192.168.0.101:554/stream1' }) rtsp_url: string;
+  @ApiProperty({ example: 'admin' }) rtsp_username: string;
+  @ApiProperty({ example: 'secret' }) rtsp_password: string;
+  @ApiProperty({ example: 1 }) zone_id: number;
+  @ApiProperty({ example: '1920x1080' }) resolution: string;
+  @ApiProperty({ example: 30 }) fps: number;
+  @ApiProperty({ example: 'H.264' }) codec: string;
+  @ApiProperty({ example: true }) ptz_enabled: boolean;
+  @ApiProperty({ example: true }) ir_enabled: boolean;
+  @ApiProperty({ example: '2026-04-15' }) installed_at: string;
 }
 
 export class UpdateCameraDto {
-  camera_name?: string;
-  camera_type?: string;
-  ip_address?: string;
-  port?: number;
-  rtsp_url?: string;
-  rtsp_username?: string;
-  rtsp_password?: string;
-  zone_id?: number;
-  resolution?: string;
-  fps?: number;
-  codec?: string;
-  ptz_enabled?: boolean;
-  ir_enabled?: boolean;
-  installed_at?: string;
+  @ApiPropertyOptional({ example: 'CAM-01 수정' }) camera_name?: string;
+  @ApiPropertyOptional({ example: 'FIXED', enum: ['PTZ', 'FIXED'] }) camera_type?: string;
+  @ApiPropertyOptional({ example: '192.168.0.102' }) ip_address?: string;
+  @ApiPropertyOptional({ example: 554 }) port?: number;
+  @ApiPropertyOptional({ example: 'rtsp://192.168.0.102:554/stream1' }) rtsp_url?: string;
+  @ApiPropertyOptional({ example: 'admin' }) rtsp_username?: string;
+  @ApiPropertyOptional({ example: 'newpassword' }) rtsp_password?: string;
+  @ApiPropertyOptional({ example: 2 }) zone_id?: number;
+  @ApiPropertyOptional({ example: '1280x720' }) resolution?: string;
+  @ApiPropertyOptional({ example: 15 }) fps?: number;
+  @ApiPropertyOptional({ example: 'H.265' }) codec?: string;
+  @ApiPropertyOptional({ example: false }) ptz_enabled?: boolean;
+  @ApiPropertyOptional({ example: false }) ir_enabled?: boolean;
+  @ApiPropertyOptional({ example: '2026-05-01' }) installed_at?: string;
 }
 
 function masked(cam: Camera) {
