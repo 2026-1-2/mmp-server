@@ -1,13 +1,17 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
-import { CamerasService, CreateCameraDto } from './cameras.service';
+import type { Response } from 'express';
+import { CamerasService, CreateCameraDto, UpdateCameraDto } from './cameras.service';
 
 @Controller('cameras')
 export class CamerasController {
@@ -30,13 +34,48 @@ export class CamerasController {
     });
   }
 
+  @Post()
+  create(@Body() dto: CreateCameraDto) {
+    return this.camerasService.create(dto);
+  }
+
+  // health-check-all must be declared before :camera_id routes to avoid param capture
+  @Post('health-check-all')
+  healthCheckAll() {
+    return this.camerasService.healthCheckAll();
+  }
+
   @Get(':camera_id')
   findOne(@Param('camera_id', ParseIntPipe) camera_id: number) {
     return this.camerasService.findOne(camera_id);
   }
 
-  @Post()
-  create(@Body() dto: CreateCameraDto) {
-    return this.camerasService.create(dto);
+  @Patch(':camera_id')
+  update(
+    @Param('camera_id', ParseIntPipe) camera_id: number,
+    @Body() dto: UpdateCameraDto,
+  ) {
+    return this.camerasService.update(camera_id, dto);
+  }
+
+  @Delete(':camera_id')
+  remove(@Param('camera_id', ParseIntPipe) camera_id: number) {
+    return this.camerasService.remove(camera_id);
+  }
+
+  @Post(':camera_id/health-check')
+  healthCheck(@Param('camera_id', ParseIntPipe) camera_id: number) {
+    return this.camerasService.healthCheck(camera_id);
+  }
+
+  @Get(':camera_id/snapshot')
+  async snapshot(
+    @Param('camera_id', ParseIntPipe) camera_id: number,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.camerasService.snapshot(camera_id);
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
   }
 }
