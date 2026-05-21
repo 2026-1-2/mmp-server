@@ -6,5 +6,6 @@ import { MediamtxService } from './mediamtx.service';
 @Module({
   providers: [StreamsService, MediamtxService],
   controllers: [StreamsController],
+  exports: [MediamtxService],
 })
 export class StreamsModule {}
