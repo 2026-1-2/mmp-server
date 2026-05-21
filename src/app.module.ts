@@ -4,12 +4,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { StreamsModule } from './streams/streams.module';
 import { PtzModule } from './ptz/ptz.module';
+import { CamerasModule } from './cameras/cameras.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     StreamsModule,
     PtzModule,
+    CamerasModule,
   ],
   controllers: [AppController],
   providers: [AppService],
