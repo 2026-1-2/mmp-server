@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Camera {
+  camera_id         Int         @id @default(autoincrement())
+  camera_name       String
+  camera_type       String
+  ip_address        String
+  port              Int
+  rtsp_url          String      @unique
+  rtsp_username     String
+  rtsp_password     String
+  zone_id           Int
+  resolution        String
+  fps               Int
+  codec             String
+  ptz_enabled       Boolean
+  ir_enabled        Boolean
+  installed_at      String
+  status            String      @default("ONLINE")
+  last_health_check DateTime?
+  created_at        DateTime    @default(now())
+  system_logs       SystemLog[]
+}
+
+model SystemLog {
+  log_id    Int      @id @default(autoincrement())
+  camera_id Int
+  event     String
+  status    String
+  message   String
+  timestamp DateTime @default(now())
+  camera    Camera   @relation(fields: [camera_id], references: [camera_id])
+}
