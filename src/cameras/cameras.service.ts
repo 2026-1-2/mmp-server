@@ -9,36 +9,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import * as net from 'net';
 import { spawn } from 'child_process';
 import { MediamtxService } from '../streams/mediamtx.service';
-
-export interface Camera {
-  camera_id: number;
-  camera_name: string;
-  camera_type: string;
-  ip_address: string;
-  port: number;
-  rtsp_url: string;
-  rtsp_username: string;
-  rtsp_password: string;
-  zone_id: number;
-  resolution: string;
-  fps: number;
-  codec: string;
-  ptz_enabled: boolean;
-  ir_enabled: boolean;
-  installed_at: string;
-  status: 'ONLINE' | 'OFFLINE';
-  last_health_check?: string;
-  created_at: string;
-}
-
-export interface SystemLog {
-  log_id: number;
-  camera_id: number;
-  event: string;
-  status: 'SUCCESS' | 'FAILURE';
-  message: string;
-  timestamp: string;
-}
+import { PrismaService } from '../prisma/prisma.service';
+// PrismaService extends PrismaClient — model accessors (camera, systemLog) are available directly
 
 export class CreateCameraDto {
   @ApiProperty({ example: 'CAM-01 활주로' }) camera_name: string;
@@ -74,7 +46,7 @@ export class UpdateCameraDto {
   @ApiPropertyOptional({ example: '2026-05-01' }) installed_at?: string;
 }
 
-function masked(cam: Camera) {
+function masked<T extends { rtsp_password: string }>(cam: T) {
   return { ...cam, rtsp_password: '****' };
 }
 
@@ -91,110 +63,109 @@ function tcpPing(host: string, port: number, timeoutMs = 3000): Promise<boolean>
 
 @Injectable()
 export class CamerasService {
-  private readonly cameras = new Map<number, Camera>();
-  private readonly recordingCameraIds = new Set<number>();
-  private readonly systemLogs: SystemLog[] = [];
-  private nextId = 1;
-  private nextLogId = 1;
-
-  constructor(private readonly mediamtx: MediamtxService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mediamtx: MediamtxService,
+  ) {}
 
   async create(dto: CreateCameraDto) {
-    const duplicate = [...this.cameras.values()].find((c) => c.rtsp_url === dto.rtsp_url);
-    if (duplicate) throw new ConflictException(`rtsp_url already registered: ${dto.rtsp_url}`);
+    const existing = await this.prisma.camera.findUnique({ where: { rtsp_url: dto.rtsp_url } });
+    if (existing) throw new ConflictException(`rtsp_url already registered: ${dto.rtsp_url}`);
 
-    const camera_id = this.nextId++;
-    const camera: Camera = {
-      ...dto,
-      camera_id,
-      status: 'ONLINE',
-      created_at: new Date().toISOString(),
-    };
-
-    await this.mediamtx.addPath(`cam${camera_id}`, dto.rtsp_url);
-    this.cameras.set(camera_id, camera);
+    const camera = await this.prisma.camera.create({ data: dto });
+    await this.mediamtx.addPath(`cam${camera.camera_id}`, dto.rtsp_url);
     return masked(camera);
   }
 
-  list(filters: { zone_id?: number; status?: string; ptz_enabled?: boolean; page: number; size: number }) {
-    let items = [...this.cameras.values()];
+  async list(filters: { zone_id?: number; status?: string; ptz_enabled?: boolean; page: number; size: number }) {
+    const where = {
+      ...(filters.zone_id !== undefined && { zone_id: filters.zone_id }),
+      ...(filters.status !== undefined && { status: filters.status }),
+      ...(filters.ptz_enabled !== undefined && { ptz_enabled: filters.ptz_enabled }),
+    };
 
-    if (filters.zone_id !== undefined) items = items.filter((c) => c.zone_id === filters.zone_id);
-    if (filters.status !== undefined) items = items.filter((c) => c.status === filters.status);
-    if (filters.ptz_enabled !== undefined) items = items.filter((c) => c.ptz_enabled === filters.ptz_enabled);
+    const [total, items] = await Promise.all([
+      this.prisma.camera.count({ where }),
+      this.prisma.camera.findMany({
+        where,
+        skip: (filters.page - 1) * filters.size,
+        take: filters.size,
+        orderBy: { camera_id: 'asc' },
+      }),
+    ]);
 
-    const total = items.length;
-    const start = (filters.page - 1) * filters.size;
-    const data = items.slice(start, start + filters.size).map(masked);
-
-    return { total, page: filters.page, size: filters.size, data };
+    return { total, page: filters.page, size: filters.size, data: items.map(masked) };
   }
 
-  findOne(camera_id: number) {
-    const cam = this.cameras.get(camera_id);
+  async findOne(camera_id: number) {
+    const cam = await this.prisma.camera.findUnique({ where: { camera_id } });
     if (!cam) throw new NotFoundException(`Camera not found: ${camera_id}`);
     return masked(cam);
   }
 
   async update(camera_id: number, dto: UpdateCameraDto) {
-    const cam = this.cameras.get(camera_id);
+    const cam = await this.prisma.camera.findUnique({ where: { camera_id } });
     if (!cam) throw new NotFoundException(`Camera not found: ${camera_id}`);
 
-    const rtspChanged = dto.rtsp_url !== undefined && dto.rtsp_url !== cam.rtsp_url;
-    const updated: Camera = { ...cam, ...dto };
-    this.cameras.set(camera_id, updated);
+    const updated = await this.prisma.camera.update({ where: { camera_id }, data: dto });
 
-    if (rtspChanged) {
-      await this.mediamtx.patchPath(`cam${camera_id}`, dto.rtsp_url!);
+    if (dto.rtsp_url && dto.rtsp_url !== cam.rtsp_url) {
+      await this.mediamtx.patchPath(`cam${camera_id}`, dto.rtsp_url);
     }
 
     return masked(updated);
   }
 
   async remove(camera_id: number) {
-    const cam = this.cameras.get(camera_id);
+    const cam = await this.prisma.camera.findUnique({ where: { camera_id } });
     if (!cam) throw new NotFoundException(`Camera not found: ${camera_id}`);
 
-    if (this.recordingCameraIds.has(camera_id)) {
+    const activeRecording = await this.prisma.systemLog.findFirst({
+      where: { camera_id, event: 'RECORDING_START', status: 'SUCCESS' },
+    });
+    if (activeRecording) {
       throw new UnprocessableEntityException(`Camera ${camera_id} has an active recording`);
     }
 
     await this.mediamtx.deletePath(`cam${camera_id}`);
-    this.cameras.delete(camera_id);
+    await this.prisma.systemLog.deleteMany({ where: { camera_id } });
+    await this.prisma.camera.delete({ where: { camera_id } });
     return { camera_id, deleted: true };
   }
 
   async healthCheck(camera_id: number) {
-    const cam = this.cameras.get(camera_id);
+    const cam = await this.prisma.camera.findUnique({ where: { camera_id } });
     if (!cam) throw new NotFoundException(`Camera not found: ${camera_id}`);
 
     const reachable = await tcpPing(cam.ip_address, cam.port);
-    const now = new Date().toISOString();
-    const newStatus: Camera['status'] = reachable ? 'ONLINE' : 'OFFLINE';
+    const newStatus = reachable ? 'ONLINE' : 'OFFLINE';
 
-    this.cameras.set(camera_id, { ...cam, status: newStatus, last_health_check: now });
-
-    this.systemLogs.push({
-      log_id: this.nextLogId++,
-      camera_id,
-      event: 'HEALTH_CHECK',
-      status: reachable ? 'SUCCESS' : 'FAILURE',
-      message: reachable ? `${cam.ip_address}:${cam.port} reachable` : `${cam.ip_address}:${cam.port} unreachable`,
-      timestamp: now,
+    const updated = await this.prisma.camera.update({
+      where: { camera_id },
+      data: { status: newStatus, last_health_check: new Date() },
     });
 
-    return { camera_id, status: newStatus, last_health_check: now };
+    await this.prisma.systemLog.create({
+      data: {
+        camera_id,
+        event: 'HEALTH_CHECK',
+        status: reachable ? 'SUCCESS' : 'FAILURE',
+        message: reachable
+          ? `${cam.ip_address}:${cam.port} reachable`
+          : `${cam.ip_address}:${cam.port} unreachable`,
+      },
+    });
+
+    return { camera_id, status: updated.status, last_health_check: updated.last_health_check };
   }
 
   async healthCheckAll() {
-    const results = await Promise.all(
-      [...this.cameras.keys()].map((id) => this.healthCheck(id)),
-    );
-    return results;
+    const cameras = await this.prisma.camera.findMany({ select: { camera_id: true } });
+    return Promise.all(cameras.map((c) => this.healthCheck(c.camera_id)));
   }
 
   async snapshot(camera_id: number): Promise<Buffer> {
-    const cam = this.cameras.get(camera_id);
+    const cam = await this.prisma.camera.findUnique({ where: { camera_id } });
     if (!cam) throw new NotFoundException(`Camera not found: ${camera_id}`);
 
     return new Promise((resolve, reject) => {
@@ -207,29 +178,16 @@ export class CamerasService {
       ]);
 
       proc.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'ENOENT') {
-          reject(new ServiceUnavailableException('ffmpeg not installed'));
-        } else {
-          reject(err);
-        }
+        if (err.code === 'ENOENT') reject(new ServiceUnavailableException('ffmpeg not installed'));
+        else reject(err);
       });
 
       const chunks: Buffer[] = [];
       proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       proc.on('close', (code) => {
-        if (code === 0 && chunks.length > 0) {
-          resolve(Buffer.concat(chunks));
-        } else {
-          reject(new ServiceUnavailableException('ffmpeg failed to capture snapshot'));
-        }
+        if (code === 0 && chunks.length > 0) resolve(Buffer.concat(chunks));
+        else reject(new ServiceUnavailableException('ffmpeg failed to capture snapshot'));
       });
     });
-  }
-
-  getSystemLogs(camera_id?: number) {
-    if (camera_id !== undefined) {
-      return this.systemLogs.filter((l) => l.camera_id === camera_id);
-    }
-    return this.systemLogs;
   }
 }
