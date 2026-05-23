@@ -17,11 +17,13 @@ import {
   ApiParam,
   ApiQuery,
   ApiProduces,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CamerasService, CreateCameraDto, UpdateCameraDto } from './cameras.service';
 
 @ApiTags('Cameras')
+@ApiBearerAuth()
 @Controller('cameras')
 export class CamerasController {
   constructor(private readonly camerasService: CamerasService) {}
