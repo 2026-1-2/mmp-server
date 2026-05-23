@@ -6,13 +6,10 @@ logLevel: info
 ###############
 # Auth
 ###############
-authInternalUsers:
-  - user: any
-    permissions:
-      - action: api
-      - action: publish
-      - action: read
-      - action: playback
+# HTTP 웹훅으로 백엔드가 스트림 토큰을 검증
+# 클라이언트는 엔드포인트에 ?token=<auth_token> 쿼리로 접근
+authMethod: http
+authHTTPAddress: http://host.docker.internal:3000/streams/mediamtx-auth
 
 ###############
 # API
