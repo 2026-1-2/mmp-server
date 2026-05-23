@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CamerasService, CreateCameraDto, UpdateCameraDto } from './cameras.service';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('Cameras')
 @ApiBearerAuth()
@@ -29,6 +30,7 @@ export class CamerasController {
   constructor(private readonly camerasService: CamerasService) {}
 
   @Get()
+  @Roles('VIEWER')
   @ApiOperation({ summary: '카메라 목록' })
   @ApiQuery({ name: 'zone_id', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, enum: ['ONLINE', 'OFFLINE'] })
@@ -53,6 +55,7 @@ export class CamerasController {
   }
 
   @Post()
+  @Roles('ADMIN')
   @ApiOperation({ summary: '카메라 등록' })
   @ApiResponse({ status: 201, description: '등록된 카메라 (rtsp_password 마스킹)' })
   @ApiResponse({ status: 409, description: 'rtsp_url 중복' })
@@ -61,6 +64,7 @@ export class CamerasController {
   }
 
   @Post('health-check-all')
+  @Roles('OPERATOR')
   @ApiOperation({ summary: '전체 카메라 헬스체크' })
   @ApiResponse({ status: 200, description: '전체 카메라 헬스체크 결과 배열' })
   healthCheckAll() {
@@ -68,6 +72,7 @@ export class CamerasController {
   }
 
   @Get(':camera_id')
+  @Roles('VIEWER')
   @ApiOperation({ summary: '카메라 단건 조회' })
   @ApiParam({ name: 'camera_id', type: Number })
   @ApiResponse({ status: 200, description: '카메라 정보 (rtsp_password 마스킹)' })
@@ -77,6 +82,7 @@ export class CamerasController {
   }
 
   @Patch(':camera_id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: '카메라 수정' })
   @ApiParam({ name: 'camera_id', type: Number })
   @ApiResponse({ status: 200, description: '수정된 카메라, rtsp_url 변경 시 MediaMTX 동기화' })
@@ -89,6 +95,7 @@ export class CamerasController {
   }
 
   @Delete(':camera_id')
+  @Roles('ADMIN')
   @ApiOperation({ summary: '카메라 삭제' })
   @ApiParam({ name: 'camera_id', type: Number })
   @ApiResponse({ status: 200, description: '삭제 완료' })
@@ -99,6 +106,7 @@ export class CamerasController {
   }
 
   @Post(':camera_id/health-check')
+  @Roles('OPERATOR')
   @ApiOperation({ summary: '카메라 헬스체크' })
   @ApiParam({ name: 'camera_id', type: Number })
   @ApiResponse({ status: 200, description: 'TCP 핑 결과, status/last_health_check 갱신 및 system_logs 기록' })
@@ -108,6 +116,7 @@ export class CamerasController {
   }
 
   @Get(':camera_id/snapshot')
+  @Roles('VIEWER')
   @ApiOperation({ summary: '카메라 스냅샷' })
   @ApiParam({ name: 'camera_id', type: Number })
   @ApiProduces('image/jpeg')
