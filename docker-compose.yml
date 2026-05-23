@@ -26,6 +26,8 @@ services:
       - "9997:9997"   # REST API
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   mysql_data:

@@ -8,21 +8,22 @@ datasource db {
 }
 
 model User {
-  user_id       Int      @id @default(autoincrement())
-  username      String   @unique
-  password      String
-  role          String   @default("VIEWER")
-  refresh_token String?  @db.Text
-  created_at    DateTime @default(now())
+  user_id         Int             @id @default(autoincrement())
+  username        String          @unique
+  password        String
+  role            String          @default("VIEWER")
+  refresh_token   String?         @db.Text
+  created_at      DateTime        @default(now())
+  stream_sessions StreamSession[]
 }
 
 model Camera {
-  camera_id         Int         @id @default(autoincrement())
+  camera_id         Int             @id @default(autoincrement())
   camera_name       String
   camera_type       String
   ip_address        String
   port              Int
-  rtsp_url          String      @unique
+  rtsp_url          String          @unique
   rtsp_username     String
   rtsp_password     String
   zone_id           Int
@@ -32,10 +33,23 @@ model Camera {
   ptz_enabled       Boolean
   ir_enabled        Boolean
   installed_at      String
-  status            String      @default("ONLINE")
+  status            String          @default("ONLINE")
   last_health_check DateTime?
-  created_at        DateTime    @default(now())
+  created_at        DateTime        @default(now())
   system_logs       SystemLog[]
+  stream_sessions   StreamSession[]
+}
+
+model StreamSession {
+  session_id   Int       @id @default(autoincrement())
+  camera_id    Int
+  user_id      Int
+  protocol     String
+  started_at   DateTime  @default(now())
+  ended_at     DateTime?
+  duration_sec Int?
+  camera       Camera    @relation(fields: [camera_id], references: [camera_id])
+  user         User      @relation(fields: [user_id], references: [user_id])
 }
 
 model SystemLog {
