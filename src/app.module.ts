@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { SystemModule } from './system/system.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     StreamsModule,
     PtzModule,
     CamerasModule,
+    SystemModule,
   ],
   controllers: [AppController],
   providers: [
