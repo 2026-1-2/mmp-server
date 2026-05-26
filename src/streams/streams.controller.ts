@@ -183,16 +183,31 @@ export class StreamsController {
 
   @Get(':channelId/vod')
   @Roles('VIEWER')
-  @ApiOperation({ summary: 'VOD 파일 목록' })
+  @ApiOperation({ summary: 'VOD 파일 목록 (페이지네이션)' })
   @ApiParam({ name: 'channelId', type: String })
-  vodList(@Param('channelId') channelId: string) {
+  @ApiQuery({ name: 'page', required: false, type: Number, description: '페이지 번호 (기본 1)' })
+  @ApiQuery({ name: 'size', required: false, type: Number, description: '페이지 크기 (기본 10, 최대 100)' })
+  @ApiQuery({ name: 'date', required: false, type: String, example: '2026-05-25', description: '날짜 필터 (YYYY-MM-DD)' })
+  vodList(
+    @Param('channelId') channelId: string,
+    @Query('page') page = '1',
+    @Query('size') size = '10',
+    @Query('date') date?: string,
+  ) {
     this.assertChannelId(channelId);
     const vod = this.streamsService.getVodHandler(channelId);
     if (!vod) throw new NotFoundException(`No VOD for channel: ${channelId}`);
-    return vod.listFiles().map((filename) => ({
-      filename,
-      url: `/streams/${channelId}/vod/${filename}`,
-    }));
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const sizeNum = Math.min(100, Math.max(1, parseInt(size, 10) || 10));
+    const result = vod.listFilesPaginated(pageNum, sizeNum, date);
+    return {
+      ...result,
+      files: result.files.map((filename) => ({
+        filename,
+        url: `/streams/${channelId}/vod/${filename}`,
+      })),
+    };
   }
 
   @Get(':channelId/vod/:filename')
