@@ -23,12 +23,13 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
+import * as path from 'path';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { StreamsService } from './streams.service';
 
 const CHANNEL_ID_RE = /^[a-zA-Z0-9_-]+$/;
-const FILENAME_RE = /^[a-zA-Z0-9_.-]+\.mp4$/i;
+const FILENAME_RE = /^[a-zA-Z0-9_.-]+\.(ts|mp4)$/i;
 
 @ApiTags('Streams')
 @ApiBearerAuth()
@@ -233,6 +234,7 @@ export class StreamsController {
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
     const range = req.headers.range;
+    const contentType = path.extname(filename).toLowerCase() === '.ts' ? 'video/mp2t' : 'video/mp4';
 
     if (range) {
       const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
@@ -243,13 +245,13 @@ export class StreamsController {
       res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Content-Length', chunkSize);
-      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Content-Type', contentType);
       res.status(206);
       fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
       res.setHeader('Content-Length', fileSize);
       res.setHeader('Accept-Ranges', 'bytes');
-      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Content-Type', contentType);
       fs.createReadStream(filePath).pipe(res);
     }
   }

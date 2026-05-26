@@ -16,7 +16,7 @@ export class VodHandler {
     if (!fs.existsSync(this.sourceDir)) return [];
     return fs
       .readdirSync(this.sourceDir)
-      .filter((f) => f.toLowerCase().endsWith('.mp4'))
+      .filter((f) => /\.(ts|mp4)$/i.test(f))
       .sort()
       .reverse(); // newest first
   }
