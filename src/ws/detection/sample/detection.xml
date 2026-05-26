@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detection>
+  <camera_id>1</camera_id>
+  <object_type>person</object_type>
+  <confidence>0.95</confidence>
+  <timestamp>2026-05-26T10:00:00Z</timestamp>
+  <bbox x="120" y="200" width="60" height="150"/>
+</detection>
