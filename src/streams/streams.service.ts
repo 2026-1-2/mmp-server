@@ -16,8 +16,6 @@ import { VodHandler } from './vod-handler';
 @Injectable()
 export class StreamsService implements OnModuleInit {
   private readonly logger = new Logger(StreamsService.name);
-  private readonly vods = new Map<string, VodHandler>();
-
   private readonly recordingsDir: string;
   private readonly mediamtxHost: string;
   private readonly hlsPort: number;
@@ -38,11 +36,7 @@ export class StreamsService implements OnModuleInit {
     if (!fs.existsSync(this.recordingsDir)) return;
     for (const dirent of fs.readdirSync(this.recordingsDir, { withFileTypes: true })) {
       if (!dirent.isDirectory()) continue;
-      const vodDir = path.join(this.recordingsDir, dirent.name, 'vod');
-      if (fs.existsSync(vodDir)) {
-        this.vods.set(dirent.name, new VodHandler(vodDir));
-        this.logger.log(`[${dirent.name}] VOD handler ready`);
-      }
+      this.logger.log(`[${dirent.name}] VOD directory found`);
     }
   }
 
@@ -117,6 +111,7 @@ export class StreamsService implements OnModuleInit {
   // ── VOD ───────────────────────────────────────────────────────────────────
 
   getVodHandler(channelId: string): VodHandler | null {
-    return this.vods.get(channelId) ?? null;
+    const dir = path.join(this.recordingsDir, channelId);
+    return fs.existsSync(dir) ? new VodHandler(dir) : null;
   }
 }

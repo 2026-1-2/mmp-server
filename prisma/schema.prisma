@@ -15,6 +15,26 @@ model User {
   refresh_token   String?         @db.Text
   created_at      DateTime        @default(now())
   stream_sessions StreamSession[]
+  activity_logs   ActivityLog[]
+}
+
+model ActivityLog {
+  log_id      Int      @id @default(autoincrement())
+  user_id     Int?
+  action_type String
+  target      String?
+  detail      String?  @db.Text
+  created_at  DateTime @default(now())
+  user        User?    @relation(fields: [user_id], references: [user_id])
+}
+
+model InfraLog {
+  log_id    Int      @id @default(autoincrement())
+  log_level String
+  source    String
+  message   String   @db.Text
+  detail    String?  @db.Text
+  timestamp DateTime @default(now())
 }
 
 model Camera {
