@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { SystemModule } from './system/system.module';
+import { WsModule } from './ws/ws.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SystemModule } from './system/system.module';
     PtzModule,
     CamerasModule,
     SystemModule,
+    WsModule,
     LogsModule,
   ],
   controllers: [AppController],
