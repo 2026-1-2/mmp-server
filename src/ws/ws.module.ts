@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { EventBusService } from './event-bus.service';
+import { SseController } from './sse.controller';
 import { DetectionService } from './detection/detection.service';
-import { WsGateway } from './ws.gateway';
 
 @Module({
   imports: [AuthModule],
-  providers: [WsGateway, DetectionService],
-  exports: [WsGateway],
+  controllers: [SseController],
+  providers: [EventBusService, DetectionService],
+  exports: [EventBusService],
 })
 export class WsModule {}

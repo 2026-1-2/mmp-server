@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as path from 'path';
-import { WsGateway } from '../ws.gateway';
+import { EventBusService } from '../event-bus.service';
 
 function parseField(xml: string, field: string): string {
   const match = xml.match(new RegExp(`<${field}>([^<]+)</${field}>`));
@@ -14,7 +14,7 @@ export class DetectionService implements OnModuleInit {
   private readonly logger = new Logger(DetectionService.name);
   private readonly watchDir = path.join(__dirname, 'sample');
 
-  constructor(private readonly gateway: WsGateway) {}
+  constructor(private readonly eventBus: EventBusService) {}
 
   onModuleInit() {
     if (!fs.existsSync(this.watchDir)) {
@@ -43,7 +43,7 @@ export class DetectionService implements OnModuleInit {
     const confidence = parseFloat(parseField(xml, 'confidence'));
     const severity = confidence >= 0.9 ? 'CRITICAL' : 'WARNING';
 
-    this.gateway.broadcast('event.created', {
+    this.eventBus.emit('event.created', {
       event_id: Date.now(),
       camera_id: cameraId,
       severity,
