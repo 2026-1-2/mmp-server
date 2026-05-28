@@ -48,3 +48,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: [self-hosted]
+    steps:
+      - name: Pull & restart
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cd ~/0_services/infra
+          docker compose up -d mmp-api
