@@ -73,7 +73,7 @@ export class CamerasService {
     if (existing) throw new ConflictException(`rtsp_url already registered: ${dto.rtsp_url}`);
 
     const camera = await this.prisma.camera.create({ data: dto });
-    await this.mediamtx.addPath(`cam${camera.camera_id}`, dto.rtsp_url);
+    await this.mediamtx.addPath(camera.camera_name, dto.rtsp_url);
     return masked(camera);
   }
 
@@ -110,7 +110,7 @@ export class CamerasService {
     const updated = await this.prisma.camera.update({ where: { camera_id }, data: dto });
 
     if (dto.rtsp_url && dto.rtsp_url !== cam.rtsp_url) {
-      await this.mediamtx.patchPath(`cam${camera_id}`, dto.rtsp_url);
+      await this.mediamtx.patchPath(cam.camera_name, dto.rtsp_url);
     }
 
     return masked(updated);
@@ -127,7 +127,7 @@ export class CamerasService {
       throw new UnprocessableEntityException(`Camera ${camera_id} has an active recording`);
     }
 
-    await this.mediamtx.deletePath(`cam${camera_id}`);
+    await this.mediamtx.deletePath(cam.camera_name);
     await this.prisma.systemLog.deleteMany({ where: { camera_id } });
     await this.prisma.camera.delete({ where: { camera_id } });
     return { camera_id, deleted: true };

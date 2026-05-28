@@ -55,10 +55,11 @@ export class StreamsService implements OnModuleInit {
       { expiresIn: '60s' },
     );
 
+    const pathName = cam.camera_name;
     const endpoint =
       protocol === 'WEBRTC'
-        ? `http://${this.mediamtxHost}:${this.webRtcPort}/cam${cameraId}/whep`
-        : `http://${this.mediamtxHost}:${this.hlsPort}/cam${cameraId}/index.m3u8`;
+        ? `http://${this.mediamtxHost}:${this.webRtcPort}/${pathName}/whep`
+        : `http://${this.mediamtxHost}:${this.hlsPort}/${pathName}/index.m3u8`;
 
     return { session_id: session.session_id, protocol, endpoint, auth_token, expires_in: 60 };
   }
