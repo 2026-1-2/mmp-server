@@ -40,6 +40,25 @@ export class StreamsService implements OnModuleInit {
     }
   }
 
+  // ── Channel listing ───────────────────────────────────────────────────────
+
+  async listChannels() {
+    const cameras = await this.prisma.camera.findMany({ orderBy: { camera_id: 'asc' } });
+    return cameras.map((cam) => {
+      const name = cam.camera_name;
+      const hasVod = fs.existsSync(path.join(this.recordingsDir, name));
+      return {
+        channelId: name,
+        live: {
+          webRtcUrl: `http://${this.mediamtxHost}:${this.webRtcPort}/${name}/whep`,
+          hlsUrl: `http://${this.mediamtxHost}:${this.hlsPort}/${name}/index.m3u8`,
+          signalingProtocol: 'whep',
+        },
+        vod: hasVod ? { listUrl: `/streams/${name}/vod` } : null,
+      };
+    });
+  }
+
   // ── Session management ────────────────────────────────────────────────────
 
   async startSession(cameraId: number, userId: number, protocol: 'WEBRTC' | 'HLS') {

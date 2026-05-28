@@ -37,6 +37,15 @@ const FILENAME_RE = /^[a-zA-Z0-9_.-]+\.(ts|mp4)$/i;
 export class StreamsController {
   constructor(private readonly streamsService: StreamsService) {}
 
+  // ── Channel list (프론트 스트림 채널 조회용) ──────────────────────────────
+
+  @Get()
+  @Public()
+  @ApiOperation({ summary: '스트림 채널 목록 (카메라 기반)' })
+  listChannels() {
+    return this.streamsService.listChannels();
+  }
+
   // ── Live session ──────────────────────────────────────────────────────────
 
   @Post('live/:camera_id/start')
