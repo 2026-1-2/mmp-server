@@ -1,57 +1,52 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as chokidar from 'chokidar';
-import * as fs from 'fs';
 import * as path from 'path';
 import { EventBusService } from '../event-bus.service';
-
-function parseField(xml: string, field: string): string {
-  const match = xml.match(new RegExp(`<${field}>([^<]+)</${field}>`));
-  return match?.[1]?.trim() ?? '';
-}
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class DetectionService implements OnModuleInit {
   private readonly logger = new Logger(DetectionService.name);
-  private readonly watchDir = path.join(__dirname, 'sample');
+  private readonly watchDir: string;
 
-  constructor(private readonly eventBus: EventBusService) {}
+  constructor(
+    private readonly eventBus: EventBusService,
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
+    this.watchDir = this.config.get<string>('CAM_NOTIFY_DIR', '/home/mmp/camNotify');
+  }
 
   onModuleInit() {
-    if (!fs.existsSync(this.watchDir)) {
-      this.logger.warn(`Detection watch dir not found: ${this.watchDir}`);
-      return;
-    }
-
-    chokidar.watch(path.join(this.watchDir, '*.xml'), { ignoreInitial: true }).on(
-      'change',
-      (filePath: string) => {
-        try {
-          this.processFile(filePath);
-        } catch (err: unknown) {
+    chokidar
+      .watch(path.join(this.watchDir, '**', '*.jpg'), {
+        ignoreInitial: true,
+        awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 200 },
+      })
+      .on('add', (filePath: string) => {
+        this.processFile(filePath).catch((err: unknown) => {
           this.logger.error(`Failed to process ${filePath}: ${(err as Error).message}`);
-        }
-      },
-    );
+        });
+      });
 
     this.logger.log(`Watching for detections in ${this.watchDir}`);
   }
 
-  private processFile(filePath: string) {
-    const xml = fs.readFileSync(filePath, 'utf-8');
-    const cameraId = parseInt(parseField(xml, 'camera_id'), 10);
-    const objectType = parseField(xml, 'object_type');
-    const confidence = parseFloat(parseField(xml, 'confidence'));
-    const severity = confidence >= 0.9 ? 'CRITICAL' : 'WARNING';
+  private async processFile(filePath: string) {
+    const cameraIp = path.basename(path.dirname(filePath));
+    const cam = await this.prisma.camera.findFirst({ where: { ip_address: cameraIp } });
+    const camera_id = cam?.camera_id ?? null;
 
     this.eventBus.emit('event.created', {
       event_id: Date.now(),
-      camera_id: cameraId,
-      severity,
-      object_type: objectType,
-      confidence,
+      camera_id,
+      camera_ip: cameraIp,
+      image_url: `/cam-images/${cameraIp}/${path.basename(filePath)}`,
       detected_at: new Date().toISOString(),
+      severity: 'CRITICAL',
     });
 
-    this.logger.log(`[cam${cameraId}] Detection: ${objectType} (${confidence})`);
+    this.logger.log(`[${cameraIp}] Detection image: ${path.basename(filePath)}`);
   }
 }
