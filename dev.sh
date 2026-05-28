@@ -10,6 +10,9 @@ info() { echo -e "${GREEN}[server]${NC} $*"; }
 
 cd "$SERVER"
 
+info "패키지 설치..."
+npm install
+
 info "Prisma 클라이언트 생성..."
 ./node_modules/.bin/prisma generate
 
