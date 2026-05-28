@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -65,6 +65,15 @@ export class AuthController {
   @ApiResponse({ status: 401, description: '유효하지 않거나 만료된 refresh_token' })
   refresh(@Body() dto: RefreshDto) {
     return this.authService.refresh(dto.refresh_token);
+  }
+
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '현재 로그인 사용자 정보' })
+  @ApiResponse({ status: 200, description: 'user_id, username, role' })
+  @ApiResponse({ status: 401, description: '인증 필요' })
+  me(@Req() req: any) {
+    return { user_id: req.user.user_id, username: req.user.username, role: req.user.role };
   }
 
   @Post('logout')
