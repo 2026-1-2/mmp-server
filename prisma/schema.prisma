@@ -58,6 +58,7 @@ model Camera {
   created_at        DateTime        @default(now())
   system_logs       SystemLog[]
   stream_sessions   StreamSession[]
+  detection_events  DetectionEvent[]
 }
 
 model StreamSession {
@@ -80,4 +81,14 @@ model SystemLog {
   message   String
   timestamp DateTime @default(now())
   camera    Camera   @relation(fields: [camera_id], references: [camera_id])
+}
+
+model DetectionEvent {
+  event_id    Int      @id @default(autoincrement())
+  camera_id   Int?
+  camera_ip   String
+  image_url   String
+  severity    String
+  detected_at DateTime @default(now())
+  camera      Camera?  @relation(fields: [camera_id], references: [camera_id])
 }

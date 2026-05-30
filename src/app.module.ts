@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { SystemModule } from './system/system.module';
 import { WsModule } from './ws/ws.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { WsModule } from './ws/ws.module';
     SystemModule,
     WsModule,
     LogsModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [

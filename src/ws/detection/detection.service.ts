@@ -36,15 +36,23 @@ export class DetectionService implements OnModuleInit {
   private async processFile(filePath: string) {
     const cameraIp = path.basename(path.dirname(filePath));
     const cam = await this.prisma.camera.findFirst({ where: { ip_address: cameraIp } });
-    const camera_id = cam?.camera_id ?? null;
+
+    const saved = await this.prisma.detectionEvent.create({
+      data: {
+        camera_id: cam?.camera_id ?? null,
+        camera_ip: cameraIp,
+        image_url: `/cam-images/${cameraIp}/${path.basename(filePath)}`,
+        severity: 'CRITICAL',
+      },
+    });
 
     this.eventBus.emit('event.created', {
-      event_id: Date.now(),
-      camera_id,
-      camera_ip: cameraIp,
-      image_url: `/cam-images/${cameraIp}/${path.basename(filePath)}`,
-      detected_at: new Date().toISOString(),
-      severity: 'CRITICAL',
+      event_id: saved.event_id,
+      camera_id: saved.camera_id,
+      camera_ip: saved.camera_ip,
+      image_url: saved.image_url,
+      detected_at: saved.detected_at.toISOString(),
+      severity: saved.severity,
     });
 
     this.logger.log(`[${cameraIp}] Detection image: ${path.basename(filePath)}`);
