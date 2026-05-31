@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
   UnprocessableEntityException,
+  BadGatewayException,
 } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import * as net from 'net';
@@ -21,9 +22,9 @@ export class CreateCameraDto {
   @ApiProperty({ example: 'admin' }) rtsp_username: string;
   @ApiProperty({ example: 'secret' }) rtsp_password: string;
   @ApiProperty({ example: 1 }) zone_id: number;
-  @ApiProperty({ example: '1920x1080' }) resolution: string;
-  @ApiProperty({ example: 30 }) fps: number;
-  @ApiProperty({ example: 'H.264' }) codec: string;
+  @ApiPropertyOptional({ example: '1920x1080' }) resolution?: string;
+  @ApiPropertyOptional({ example: 30 }) fps?: number;
+  @ApiPropertyOptional({ example: 'H.264' }) codec?: string;
   @ApiProperty({ example: true }) ptz_enabled: boolean;
   @ApiProperty({ example: true }) ir_enabled: boolean;
   @ApiProperty({ example: '2026-04-15' }) installed_at: string;
@@ -73,7 +74,12 @@ export class CamerasService {
     if (existing) throw new ConflictException(`rtsp_url already registered: ${dto.rtsp_url}`);
 
     const camera = await this.prisma.camera.create({ data: dto });
-    await this.mediamtx.addPath(camera.camera_name, dto.rtsp_url);
+    try {
+      await this.mediamtx.addPath(camera.camera_name, dto.rtsp_url);
+    } catch {
+      await this.prisma.camera.delete({ where: { camera_id: camera.camera_id } });
+      throw new BadGatewayException('MediaMTX 경로 등록 실패 - MediaMTX 서버 상태를 확인하세요');
+    }
     return masked(camera);
   }
 

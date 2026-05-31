@@ -47,9 +47,9 @@ model Camera {
   rtsp_username     String
   rtsp_password     String
   zone_id           Int
-  resolution        String
-  fps               Int
-  codec             String
+  resolution        String?
+  fps               Int?
+  codec             String?
   ptz_enabled       Boolean
   ir_enabled        Boolean
   installed_at      String
